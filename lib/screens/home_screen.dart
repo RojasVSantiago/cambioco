@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/exchange_provider.dart';
 import '../widgets/rate_card.dart';
+import '../widgets/converter_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -110,11 +111,8 @@ class _HomeScreenState extends State<HomeScreen> {
           trend: provider.copTrend,
         ),
         const SizedBox(height: 16),
-        // Aquí irá el widget conversor en el Commit 3
-        const Placeholder(
-          fallbackHeight: 200,
-          color: Colors.grey,
-        ),
+        // Widget conversor 
+        ConverterWidget(rate: provider.currentRate!),
       ],
     );
   }
