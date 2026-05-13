@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/exchange_provider.dart';
 import '../widgets/rate_card.dart';
 import '../widgets/converter_widget.dart';
+import 'history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,13 +29,25 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('CambioCO'),
         centerTitle: true,
         actions: [
-          // Botón de refrescar manual
+          // Botón de historial
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const HistoryScreen(),
+                ),
+              );
+            },
+          ),
+          // Botón de refrescar
           Consumer<ExchangeProvider>(
             builder: (context, provider, _) {
               return IconButton(
                 icon: const Icon(Icons.refresh),
                 onPressed: provider.status == ExchangeStatus.loading
-                    ? null // Desactivado mientras carga
+                    ? null
                     : () => provider.refresh(),
               );
             },
@@ -46,7 +59,8 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Consumer<ExchangeProvider>(
           builder: (context, provider, _) {
             return switch (provider.status) {
-              ExchangeStatus.initial || ExchangeStatus.loading =>
+              ExchangeStatus.initial ||
+              ExchangeStatus.loading =>
                 _buildLoading(),
               ExchangeStatus.error => _buildError(
                   provider.errorMessage,
@@ -111,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
           trend: provider.copTrend,
         ),
         const SizedBox(height: 16),
-        // Widget conversor 
+        // Widget conversor
         ConverterWidget(rate: provider.currentRate!),
       ],
     );

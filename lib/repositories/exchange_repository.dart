@@ -33,8 +33,8 @@ class ExchangeRepository {
     );
 
     final response = await http.get(url).timeout(
-      const Duration(seconds: 10),
-    );
+          const Duration(seconds: 10),
+        );
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -72,5 +72,40 @@ class ExchangeRepository {
     if (age > _cacheValidity) return null;
 
     return rate;
+  }
+
+  // Guarda una tasa en el historial (máximo 10 entradas)
+  Future<void> saveToHistory(ExchangeRate rate) async {
+    final prefs = await SharedPreferences.getInstance();
+    final history = await loadHistory();
+
+    // Evitar duplicados del mismo día
+    final alreadySaved = history.any(
+      (r) =>
+          r.fetchedAt.day == rate.fetchedAt.day &&
+          r.fetchedAt.month == rate.fetchedAt.month &&
+          r.fetchedAt.year == rate.fetchedAt.year,
+    );
+
+    if (alreadySaved) return;
+
+    history.insert(0, rate); // más reciente primero
+
+    final trimmed = history.take(10).toList(); // máximo 10 entradas
+
+    final jsonList = trimmed.map((r) => jsonEncode(r.toJson())).toList();
+    await prefs.setStringList('exchange_history', jsonList);
+  }
+
+// Carga el historial completo
+  Future<List<ExchangeRate>> loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = prefs.getStringList('exchange_history') ?? [];
+
+    return jsonList.map((jsonString) {
+      return ExchangeRate.fromCache(
+        jsonDecode(jsonString) as Map<String, dynamic>,
+      );
+    }).toList();
   }
 }

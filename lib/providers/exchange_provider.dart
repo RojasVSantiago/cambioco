@@ -18,6 +18,8 @@ class ExchangeProvider extends ChangeNotifier {
   ExchangeRate? get currentRate => _currentRate;
   ExchangeRate? get previousRate => _previousRate;
   String get errorMessage => _errorMessage;
+  List<ExchangeRate> _history = [];
+  List<ExchangeRate> get history => _history;
 
   // ¿El dólar subió respecto a la consulta anterior?
   bool? get copTrend {
@@ -45,11 +47,14 @@ class ExchangeProvider extends ChangeNotifier {
       _previousRate = _currentRate;
       _currentRate = fresh;
       _status = ExchangeStatus.success;
+      await _repository.saveToHistory(fresh);
+      await loadHistory();
     } catch (e) {
       // Si ya había caché, no sobreescribimos con error
       if (_currentRate == null) {
         _status = ExchangeStatus.error;
-        _errorMessage = 'Sin conexión y sin datos guardados.\nIntenta más tarde.';
+        _errorMessage =
+            'Sin conexión y sin datos guardados.\nIntenta más tarde.';
       }
     }
 
@@ -61,5 +66,10 @@ class ExchangeProvider extends ChangeNotifier {
     _status = ExchangeStatus.loading;
     notifyListeners();
     await loadRate();
+  }
+
+  Future<void> loadHistory() async {
+    _history = await _repository.loadHistory();
+    notifyListeners();
   }
 }
