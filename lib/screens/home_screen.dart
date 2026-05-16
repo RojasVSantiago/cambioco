@@ -117,17 +117,77 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Contenido principal
   Widget _buildContent(ExchangeProvider provider) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        RateCard(
-          rate: provider.currentRate!,
-          trend: provider.copTrend,
+  final now = DateTime.now();
+  final greeting = _getGreeting(now.hour);
+
+  return ListView(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    children: [
+      // Saludo y fecha
+      Padding(
+        padding: const EdgeInsets.only(bottom: 16, left: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              greeting,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _formatDate(now),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
-        // Widget conversor
-        ConverterWidget(rate: provider.currentRate!),
-      ],
-    );
-  }
+      ),
+
+      // Tarjeta de tasa
+      RateCard(
+        rate: provider.currentRate!,
+        trend: provider.copTrend,
+      ),
+      const SizedBox(height: 12),
+
+      // Conversor
+      ConverterWidget(rate: provider.currentRate!),
+      const SizedBox(height: 16),
+
+      // Atribución de fuente
+      Center(
+        child: Text(
+          'Tasas proporcionadas por ExchangeRate-API',
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey.shade500,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+String _getGreeting(int hour) {
+  if (hour < 12) return 'Buenos días 🌤️';
+  if (hour < 18) return 'Buenas tardes ☀️';
+  return 'Buenas noches 🌙';
+}
+
+String _formatDate(DateTime dt) {
+  const days = [
+    '', 'Lunes', 'Martes', 'Miércoles',
+    'Jueves', 'Viernes', 'Sábado', 'Domingo'
+  ];
+  const months = [
+    '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+  ];
+  return '${days[dt.weekday]}, ${dt.day} de ${months[dt.month]} de ${dt.year}';
+}
 }
