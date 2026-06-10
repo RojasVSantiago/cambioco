@@ -101,7 +101,7 @@ flutter run
 
 ## Autor / Author
 
-**Tu Nombre**
+**Santiago Rojas**
 - GitHub: [RojasVSantiago](https://github.com/RojasVSantiago)
 - LinkedIn: [srojasv](https://www.linkedin.com/in/srojasv/)
 
