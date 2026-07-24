@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/exchange_provider.dart';
-import '../widgets/rate_card.dart';
+import '../providers/currency_selection_provider.dart';
+import '../widgets/currency_card.dart';
 import '../widgets/converter_widget.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/error_view.dart';
 import '../widgets/greeting_header.dart';
+import 'manage_currencies_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,7 +26,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Recarga compartida entre el botón de la AppBar y el Drawer
   void _loadData() {
     context.read<ExchangeProvider>().refresh();
   }
@@ -49,6 +50,18 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       drawer: AppDrawer(onRecargar: _loadData),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ManageCurrenciesScreen(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Monedas'),
+      ),
       body: RefreshIndicator(
         onRefresh: () => context.read<ExchangeProvider>().refresh(),
         child: Consumer<ExchangeProvider>(
@@ -71,16 +84,31 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildContent(ExchangeProvider provider) {
     final now = DateTime.now();
+    final selection = context.watch<CurrencySelectionProvider>();
+    final mainCurrency = selection.mainCurrency;
+    // La moneda base (hoy fija en USD, configurable más adelante) nunca
+    // se muestra como card — convertirla contra sí misma es siempre 1.00
+    // y no aporta información.
+    final baseCurrency = provider.currentRate!.baseCurrency;
+
+    final orderedCodes = [
+      mainCurrency,
+      ...selection.selectedCurrencies.where((c) => c != mainCurrency),
+    ].where((c) => c != baseCurrency).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         GreetingHeader(now: now),
-        RateCard(
-          rate: provider.currentRate!,
-          trend: provider.copTrend,
-        ),
-        const SizedBox(height: 12),
+        for (final code in orderedCodes) ...[
+          CurrencyCard(
+            rate: provider.currentRate!,
+            currencyCode: code,
+            isMain: code == mainCurrency,
+            trend: provider.trendFor(code),
+          ),
+          const SizedBox(height: 12),
+        ],
         ConverterWidget(rate: provider.currentRate!),
         const SizedBox(height: 16),
         Center(

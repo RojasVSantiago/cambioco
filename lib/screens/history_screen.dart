@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/exchange_rate.dart';
 import '../providers/exchange_provider.dart';
+import '../providers/currency_selection_provider.dart';
+import '../config/currency_formatters.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -9,6 +11,7 @@ class HistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final history = context.watch<ExchangeProvider>().history;
+    final mainCurrency = context.watch<CurrencySelectionProvider>().mainCurrency;
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -20,7 +23,6 @@ class HistoryScreen extends StatelessWidget {
           ? _buildEmpty()
           : Column(
               children: [
-                // Encabezado con conteo
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
@@ -36,8 +38,6 @@ class HistoryScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-
-                // Lista de entradas
                 Expanded(
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
@@ -48,7 +48,11 @@ class HistoryScreen extends StatelessWidget {
                       final previous = index < history.length - 1
                           ? history[index + 1]
                           : null;
-                      return _HistoryCard(rate: rate, previous: previous);
+                      return _HistoryCard(
+                        rate: rate,
+                        previous: previous,
+                        currencyCode: mainCurrency,
+                      );
                     },
                   ),
                 ),
@@ -66,19 +70,13 @@ class HistoryScreen extends StatelessWidget {
           const SizedBox(height: 16),
           const Text(
             'Aún no hay consultas guardadas',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
             'Vuelve mañana para ver\ncómo se mueve el dólar.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey.shade500,
-            ),
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
           ),
         ],
       ),
@@ -89,13 +87,20 @@ class HistoryScreen extends StatelessWidget {
 class _HistoryCard extends StatelessWidget {
   final ExchangeRate rate;
   final ExchangeRate? previous;
+  final String currencyCode;
 
-  const _HistoryCard({required this.rate, this.previous});
+  const _HistoryCard({
+    required this.rate,
+    required this.currencyCode,
+    this.previous,
+  });
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final isUp = previous != null ? rate.copRate > previous!.copRate : null;
+    final value = rate.rateFor(currencyCode);
+    final previousValue = previous?.rateFor(currencyCode);
+    final isUp = previousValue != null ? value > previousValue : null;
 
     return Card(
       elevation: 0,
@@ -104,7 +109,6 @@ class _HistoryCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            // Ícono de calendario
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -118,8 +122,6 @@ class _HistoryCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 14),
-
-            // Fecha y EUR
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,7 +135,7 @@ class _HistoryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '1 USD = € ${rate.eurRate.toStringAsFixed(4)}',
+                    '1 USD = $currencyCode',
                     style: TextStyle(
                       fontSize: 12,
                       color: colors.onSurface.withOpacity(0.5),
@@ -142,13 +144,11 @@ class _HistoryCard extends StatelessWidget {
                 ],
               ),
             ),
-
-            // COP + tendencia
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '\$ ${_formatCOP(rate.copRate)}',
+                  formatCurrencyValue(value, currencyCode),
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
@@ -168,7 +168,10 @@ class _HistoryCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 2),
                       Text(
-                        _formatDiff(rate.copRate, previous!.copRate),
+                        formatCurrencyValue(
+                          (value - previousValue!).abs(),
+                          currencyCode,
+                        ),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -194,20 +197,5 @@ class _HistoryCard extends StatelessWidget {
       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
     ];
     return '${dt.day} ${months[dt.month]} ${dt.year}';
-  }
-
-  String _formatCOP(double value) {
-    return value
-        .toStringAsFixed(0)
-        .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]}.',
-        );
-  }
-
-  // Muestra la diferencia vs el día anterior
-  String _formatDiff(double current, double previous) {
-    final diff = (current - previous).abs();
-    return '\$ ${diff.toStringAsFixed(0)}';
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../models/exchange_rate.dart';
+import '../providers/currency_selection_provider.dart';
+import '../config/currency_formatters.dart';
 
 class ConverterWidget extends StatefulWidget {
   final ExchangeRate rate;
@@ -13,11 +16,9 @@ class ConverterWidget extends StatefulWidget {
 
 class _ConverterWidgetState extends State<ConverterWidget> {
   final _controller = TextEditingController();
-  String _fromCurrency = 'USD';
-  String _toCurrency = 'COP';
+  String? _fromCurrency;
+  String? _toCurrency;
   double? _result;
-
-  final List<String> _currencies = ['USD', 'COP', 'EUR'];
 
   @override
   void dispose() {
@@ -25,12 +26,31 @@ class _ConverterWidgetState extends State<ConverterWidget> {
     super.dispose();
   }
 
+  // Asegura que _fromCurrency/_toCurrency sean válidos según la selección
+  // actual del usuario — se corrige solo si alguna moneda ya no existe
+  // en la lista (ej. el usuario la eliminó en Modificar monedas).
+  void _ensureValidSelection(List<String> currencies) {
+    if (currencies.isEmpty) return;
+
+    if (_fromCurrency == null || !currencies.contains(_fromCurrency)) {
+      _fromCurrency = currencies.first;
+    }
+    if (_toCurrency == null ||
+        !currencies.contains(_toCurrency) ||
+        _toCurrency == _fromCurrency) {
+      _toCurrency = currencies.firstWhere(
+        (c) => c != _fromCurrency,
+        orElse: () => currencies.first,
+      );
+    }
+  }
+
   void _convert() {
     final input = double.tryParse(
       _controller.text.replaceAll(',', '.'),
     );
 
-    if (input == null) {
+    if (input == null || _fromCurrency == null || _toCurrency == null) {
       setState(() => _result = null);
       return;
     }
@@ -38,8 +58,8 @@ class _ConverterWidgetState extends State<ConverterWidget> {
     setState(() {
       _result = widget.rate.convert(
         amount: input,
-        from: _fromCurrency,
-        to: _toCurrency,
+        from: _fromCurrency!,
+        to: _toCurrency!,
       );
     });
   }
@@ -57,6 +77,23 @@ class _ConverterWidgetState extends State<ConverterWidget> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final currencies = context.watch<CurrencySelectionProvider>().selectedCurrencies;
+
+    if (currencies.length < 2) {
+      return Card(
+        elevation: 0,
+        color: colors.surfaceContainerHighest,
+        child: const Padding(
+          padding: EdgeInsets.all(20),
+          child: Text(
+            'Agrega al menos 2 monedas en "Modificar monedas" '
+            'para usar el conversor.',
+          ),
+        ),
+      );
+    }
+
+    _ensureValidSelection(currencies);
 
     return Card(
       elevation: 0,
@@ -66,7 +103,6 @@ class _ConverterWidgetState extends State<ConverterWidget> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Título
             Text(
               'Conversor',
               style: TextStyle(
@@ -76,19 +112,18 @@ class _ConverterWidgetState extends State<ConverterWidget> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Fila: selector origen + campo de texto
             Row(
               children: [
                 _buildCurrencyDropdown(
-                  value: _fromCurrency,
+                  value: _fromCurrency!,
+                  currencies: currencies,
                   onChanged: (value) {
                     setState(() {
                       _fromCurrency = value!;
-                      // Evitar que origen y destino sean iguales
                       if (_fromCurrency == _toCurrency) {
-                        _toCurrency = _currencies.firstWhere(
+                        _toCurrency = currencies.firstWhere(
                           (c) => c != _fromCurrency,
+                          orElse: () => currencies.first,
                         );
                       }
                       _result = null;
@@ -121,10 +156,7 @@ class _ConverterWidgetState extends State<ConverterWidget> {
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
-
-            // Botón de intercambio centrado
             Center(
               child: IconButton.filled(
                 onPressed: _swapCurrencies,
@@ -135,20 +167,19 @@ class _ConverterWidgetState extends State<ConverterWidget> {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // Fila: selector destino + resultado
             Row(
               children: [
                 _buildCurrencyDropdown(
-                  value: _toCurrency,
+                  value: _toCurrency!,
+                  currencies: currencies,
                   onChanged: (value) {
                     setState(() {
                       _toCurrency = value!;
                       if (_toCurrency == _fromCurrency) {
-                        _fromCurrency = _currencies.firstWhere(
+                        _fromCurrency = currencies.firstWhere(
                           (c) => c != _toCurrency,
+                          orElse: () => currencies.first,
                         );
                       }
                       _result = null;
@@ -168,7 +199,7 @@ class _ConverterWidgetState extends State<ConverterWidget> {
                     ),
                     child: Text(
                       _result != null
-                          ? _formatResult(_result!, _toCurrency)
+                          ? formatCurrencyValue(_result!, _toCurrency!)
                           : '—',
                       style: TextStyle(
                         fontSize: 16,
@@ -188,9 +219,9 @@ class _ConverterWidgetState extends State<ConverterWidget> {
     );
   }
 
-  // Dropdown reutilizable para seleccionar moneda
   Widget _buildCurrencyDropdown({
     required String value,
+    required List<String> currencies,
     required void Function(String?) onChanged,
   }) {
     final colors = Theme.of(context).colorScheme;
@@ -204,7 +235,7 @@ class _ConverterWidgetState extends State<ConverterWidget> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          items: _currencies.map((currency) {
+          items: currencies.map((currency) {
             return DropdownMenuItem(
               value: currency,
               child: Text(
@@ -217,17 +248,5 @@ class _ConverterWidgetState extends State<ConverterWidget> {
         ),
       ),
     );
-  }
-
-  // Formatea el resultado según la moneda destino
-  String _formatResult(double value, String currency) {
-    return switch (currency) {
-      'COP' => '\$ ${value.toStringAsFixed(0).replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-            (m) => '${m[1]}.',
-          )}',
-      'EUR' => '€ ${value.toStringAsFixed(2)}',
-      _ => '\$ ${value.toStringAsFixed(2)}',
-    };
   }
 }

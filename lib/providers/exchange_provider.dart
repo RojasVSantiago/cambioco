@@ -13,7 +13,6 @@ class ExchangeProvider extends ChangeNotifier {
   ExchangeRate? _previousRate;
   String _errorMessage = '';
 
-  // Getters — la UI solo puede leer, no modificar directamente
   ExchangeStatus get status => _status;
   ExchangeRate? get currentRate => _currentRate;
   ExchangeRate? get previousRate => _previousRate;
@@ -21,15 +20,16 @@ class ExchangeProvider extends ChangeNotifier {
   List<ExchangeRate> _history = [];
   List<ExchangeRate> get history => _history;
 
-  // ¿El dólar subió respecto a la consulta anterior?
-  bool? get copTrend {
+  // Se mantiene por compatibilidad — equivale a trendFor('COP')
+  bool? get copTrend => trendFor('COP');
+
+  // Tendencia genérica para cualquier moneda seleccionada
+  bool? trendFor(String code) {
     if (_currentRate == null || _previousRate == null) return null;
-    return _currentRate!.copRate > _previousRate!.copRate;
+    return _currentRate!.rateFor(code) > _previousRate!.rateFor(code);
   }
 
-  // Carga la tasa al iniciar — primero muestra caché, luego actualiza
   Future<void> loadRate() async {
-    // Si hay caché, mostrarlo inmediatamente mientras carga
     final cached = await _repository.getCachedRate();
     if (cached != null) {
       _previousRate = _currentRate;
@@ -41,7 +41,6 @@ class ExchangeProvider extends ChangeNotifier {
       notifyListeners();
     }
 
-    // Luego busca datos frescos de la API
     try {
       final fresh = await _repository.fetchLatestRate();
       _previousRate = _currentRate;
@@ -50,7 +49,6 @@ class ExchangeProvider extends ChangeNotifier {
       await _repository.saveToHistory(fresh);
       await loadHistory();
     } catch (e) {
-      // Si ya había caché, no sobreescribimos con error
       if (_currentRate == null) {
         _status = ExchangeStatus.error;
         _errorMessage =
@@ -61,7 +59,6 @@ class ExchangeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Permite refrescar manualmente con pull-to-refresh
   Future<void> refresh() async {
     _status = ExchangeStatus.loading;
     notifyListeners();
