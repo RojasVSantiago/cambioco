@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/exchange_provider.dart';
+import 'providers/currency_selection_provider.dart';
 import 'screens/home_screen.dart';
 
 void main() {
@@ -12,8 +13,13 @@ class CambioCOApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ExchangeProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ExchangeProvider()),
+        ChangeNotifierProvider(
+          create: (_) => CurrencySelectionProvider()..load(),
+        ),
+      ],
       child: MaterialApp(
         title: 'CambioCO',
         debugShowCheckedModeBanner: false,
