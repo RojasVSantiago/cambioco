@@ -18,20 +18,29 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-    Future.microtask(
-      () => context.read<ExchangeProvider>().loadRate(),
-    );
-  }
+  bool _initialLoadTriggered = false;
 
   void _loadData() {
-    context.read<ExchangeProvider>().refresh();
+    final base = context.read<CurrencySelectionProvider>().baseCurrency;
+    context.read<ExchangeProvider>().refresh(base: base);
   }
 
   @override
   Widget build(BuildContext context) {
+    final selection = context.watch<CurrencySelectionProvider>();
+
+    // Espera a que CurrencySelectionProvider termine de leer SharedPreferences
+    // antes de la primera consulta — evita usar la base por defecto (USD)
+    // si el usuario ya había guardado otra base en una sesión anterior.
+    if (selection.isLoaded && !_initialLoadTriggered) {
+      _initialLoadTriggered = true;
+      Future.microtask(
+        () => context
+            .read<ExchangeProvider>()
+            .loadRate(base: selection.baseCurrency),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('CambioCO'),
@@ -63,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
         label: const Text('Monedas'),
       ),
       body: RefreshIndicator(
-        onRefresh: () => context.read<ExchangeProvider>().refresh(),
+        onRefresh: () => Future.sync(_loadData),
         child: Consumer<ExchangeProvider>(
           builder: (context, provider, _) {
             return switch (provider.status) {
@@ -72,7 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const LoadingView(),
               ExchangeStatus.error => ErrorView(
                   message: provider.errorMessage,
-                  onRetry: () => provider.loadRate(),
+                  onRetry: _loadData,
                 ),
               ExchangeStatus.success => _buildContent(provider),
             };
@@ -86,9 +95,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final now = DateTime.now();
     final selection = context.watch<CurrencySelectionProvider>();
     final mainCurrency = selection.mainCurrency;
-    // La moneda base (hoy fija en USD, configurable más adelante) nunca
-    // se muestra como card — convertirla contra sí misma es siempre 1.00
-    // y no aporta información.
     final baseCurrency = provider.currentRate!.baseCurrency;
 
     final orderedCodes = [

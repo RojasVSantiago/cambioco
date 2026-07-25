@@ -6,31 +6,28 @@ import '../models/exchange_rate.dart';
 import '../models/currency_info.dart';
 
 class ExchangeRepository {
-  static const String _cacheKey = 'cached_exchange_rate';
+  static const String _cacheKeyPrefix = 'cached_exchange_rate_';
   static const Duration _cacheValidity = Duration(hours: 1);
 
-  // Obtiene la tasa actual — primero intenta la API, si falla usa caché
-  Future<ExchangeRate> fetchLatestRate() async {
+  Future<ExchangeRate> fetchLatestRate(String base) async {
     try {
-      final rate = await _fetchFromApi();
+      final rate = await _fetchFromApi(base);
       await _saveToCache(rate);
       return rate;
     } catch (e) {
-      final cached = await _loadFromCache();
+      final cached = await _loadFromCache(base);
       if (cached != null) return cached;
       rethrow;
     }
   }
 
-  // Carga la tasa guardada localmente (puede ser null si nunca se ha consultado)
-  Future<ExchangeRate?> getCachedRate() async {
-    return _loadFromCache();
+  Future<ExchangeRate?> getCachedRate(String base) async {
+    return _loadFromCache(base);
   }
 
-  // Llama a la API de ExchangeRate-API
-  Future<ExchangeRate> _fetchFromApi() async {
+  Future<ExchangeRate> _fetchFromApi(String base) async {
     final url = Uri.parse(
-      '${ApiConfig.baseUrl}/${ApiConfig.exchangeRateApiKey}/latest/USD',
+      '${ApiConfig.baseUrl}/${ApiConfig.exchangeRateApiKey}/latest/$base',
     );
 
     final response = await http.get(url).timeout(
@@ -50,7 +47,6 @@ class ExchangeRepository {
     }
   }
 
-  // Trae la lista completa de monedas soportadas por la API
   Future<List<CurrencyInfo>> fetchSupportedCurrencies() async {
     final url = Uri.parse(
       '${ApiConfig.baseUrl}/${ApiConfig.exchangeRateApiKey}/codes',
@@ -76,18 +72,19 @@ class ExchangeRepository {
     }
   }
 
-  // Guarda la tasa en SharedPreferences
+  String _cacheKeyFor(String base) => '$_cacheKeyPrefix$base';
+
+  // El caché se guarda por base — consultar con base USD y con base CAD
+  // no deben pisarse entre sí.
   Future<void> _saveToCache(ExchangeRate rate) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = jsonEncode(rate.toJson());
-    await prefs.setString(_cacheKey, jsonString);
+    await prefs.setString(_cacheKeyFor(rate.baseCurrency), jsonString);
   }
 
-  // Lee la tasa guardada — retorna null si no hay, si expiró,
-  // o si quedó en el formato viejo (antes de rates como mapa)
-  Future<ExchangeRate?> _loadFromCache() async {
+  Future<ExchangeRate?> _loadFromCache(String base) async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_cacheKey);
+    final jsonString = prefs.getString(_cacheKeyFor(base));
 
     if (jsonString == null) return null;
 
@@ -96,43 +93,42 @@ class ExchangeRepository {
         jsonDecode(jsonString) as Map<String, dynamic>,
       );
 
-      // Si el caché tiene más de 1 hora, lo ignoramos
       final age = DateTime.now().difference(rate.fetchedAt);
       if (age > _cacheValidity) return null;
 
       return rate;
     } catch (e) {
-      // Caché en formato antiguo (esquema copRate/eurRate/usdRate) —
-      // se ignora y se pide dato fresco a la API. Ver nota de migración
-      // en README: limpiar manualmente en una ronda posterior.
+      // Caché en formato antiguo (esquema previo a rates como mapa) —
+      // se ignora y se pide dato fresco a la API.
       return null;
     }
   }
 
-  // Guarda una tasa en el historial (máximo 10 entradas)
+  // Guarda una tasa en el historial (máximo 10 entradas por base)
   Future<void> saveToHistory(ExchangeRate rate) async {
     final prefs = await SharedPreferences.getInstance();
     final history = await loadHistory();
 
-    // Evitar duplicados del mismo día
+    // Evitar duplicados del mismo día Y de la misma base — cambiar de
+    // base no debe bloquear guardar una entrada nueva ese mismo día.
     final alreadySaved = history.any(
       (r) =>
           r.fetchedAt.day == rate.fetchedAt.day &&
           r.fetchedAt.month == rate.fetchedAt.month &&
-          r.fetchedAt.year == rate.fetchedAt.year,
+          r.fetchedAt.year == rate.fetchedAt.year &&
+          r.baseCurrency == rate.baseCurrency,
     );
 
     if (alreadySaved) return;
 
-    history.insert(0, rate); // más reciente primero
+    history.insert(0, rate);
 
-    final trimmed = history.take(10).toList(); // máximo 10 entradas
+    final trimmed = history.take(10).toList();
 
     final jsonList = trimmed.map((r) => jsonEncode(r.toJson())).toList();
     await prefs.setStringList('exchange_history', jsonList);
   }
 
-  // Carga el historial completo
   Future<List<ExchangeRate>> loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = prefs.getStringList('exchange_history') ?? [];
@@ -144,7 +140,6 @@ class ExchangeRepository {
           jsonDecode(jsonString) as Map<String, dynamic>,
         ));
       } catch (e) {
-        // Entrada de historial en formato antiguo — se omite
         continue;
       }
     }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/exchange_rate.dart';
 import '../repositories/exchange_repository.dart';
 
-// Estados posibles de la consulta
 enum ExchangeStatus { initial, loading, success, error }
 
 class ExchangeProvider extends ChangeNotifier {
@@ -20,17 +19,15 @@ class ExchangeProvider extends ChangeNotifier {
   List<ExchangeRate> _history = [];
   List<ExchangeRate> get history => _history;
 
-  // Se mantiene por compatibilidad — equivale a trendFor('COP')
   bool? get copTrend => trendFor('COP');
 
-  // Tendencia genérica para cualquier moneda seleccionada
   bool? trendFor(String code) {
     if (_currentRate == null || _previousRate == null) return null;
     return _currentRate!.rateFor(code) > _previousRate!.rateFor(code);
   }
 
-  Future<void> loadRate() async {
-    final cached = await _repository.getCachedRate();
+  Future<void> loadRate({required String base}) async {
+    final cached = await _repository.getCachedRate(base);
     if (cached != null) {
       _previousRate = _currentRate;
       _currentRate = cached;
@@ -42,7 +39,7 @@ class ExchangeProvider extends ChangeNotifier {
     }
 
     try {
-      final fresh = await _repository.fetchLatestRate();
+      final fresh = await _repository.fetchLatestRate(base);
       _previousRate = _currentRate;
       _currentRate = fresh;
       _status = ExchangeStatus.success;
@@ -59,10 +56,10 @@ class ExchangeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({required String base}) async {
     _status = ExchangeStatus.loading;
     notifyListeners();
-    await loadRate();
+    await loadRate(base: base);
   }
 
   Future<void> loadHistory() async {

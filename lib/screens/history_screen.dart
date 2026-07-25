@@ -10,9 +10,16 @@ class HistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final history = context.watch<ExchangeProvider>().history;
-    final mainCurrency = context.watch<CurrencySelectionProvider>().mainCurrency;
+    final allHistory = context.watch<ExchangeProvider>().history;
+    final selection = context.watch<CurrencySelectionProvider>();
+    final mainCurrency = selection.mainCurrency;
+    final baseCurrency = selection.baseCurrency;
     final colors = Theme.of(context).colorScheme;
+
+    // Solo se muestran entradas calculadas con la base actual — mezclar
+    // bases distintas en la misma lista compararía valores no comparables.
+    final history =
+        allHistory.where((r) => r.baseCurrency == baseCurrency).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -31,7 +38,8 @@ class HistoryScreen extends StatelessWidget {
                   ),
                   color: colors.surfaceContainerHighest,
                   child: Text(
-                    '${history.length} consulta${history.length != 1 ? 's' : ''} guardada${history.length != 1 ? 's' : ''}',
+                    '${history.length} consulta${history.length != 1 ? 's' : ''} guardada${history.length != 1 ? 's' : ''} '
+                    '(base $baseCurrency)',
                     style: TextStyle(
                       fontSize: 13,
                       color: colors.onSurface.withOpacity(0.6),
@@ -135,7 +143,7 @@ class _HistoryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '1 USD = $currencyCode',
+                    '1 ${rate.baseCurrency} = $currencyCode',
                     style: TextStyle(
                       fontSize: 12,
                       color: colors.onSurface.withOpacity(0.5),
