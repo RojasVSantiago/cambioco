@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/exchange_rate.dart';
+import '../models/currency_info.dart';
 import '../repositories/exchange_repository.dart';
 
 enum ExchangeStatus { initial, loading, success, error }
@@ -64,6 +65,36 @@ class ExchangeProvider extends ChangeNotifier {
 
   Future<void> loadHistory() async {
     _history = await _repository.loadHistory();
+    notifyListeners();
+  }
+
+  // --- Monedas soportadas (para ManageCurrenciesScreen) ---
+
+  List<CurrencyInfo> _supportedCurrencies = [];
+  List<CurrencyInfo> get supportedCurrencies => _supportedCurrencies;
+
+  bool _loadingCurrencies = false;
+  bool get loadingCurrencies => _loadingCurrencies;
+
+  bool _supportedCurrenciesError = false;
+  bool get supportedCurrenciesError => _supportedCurrenciesError;
+
+  // Se cachea en memoria durante la sesión — no cambia con frecuencia
+  // y evita pedirla a la API cada vez que se abre la pantalla.
+  Future<void> loadSupportedCurrencies() async {
+    if (_supportedCurrencies.isNotEmpty) return;
+
+    _loadingCurrencies = true;
+    _supportedCurrenciesError = false;
+    notifyListeners();
+
+    try {
+      _supportedCurrencies = await _repository.fetchSupportedCurrencies();
+    } catch (e) {
+      _supportedCurrenciesError = true;
+    }
+
+    _loadingCurrencies = false;
     notifyListeners();
   }
 }
